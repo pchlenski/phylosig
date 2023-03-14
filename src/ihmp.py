@@ -99,22 +99,20 @@ def pagels_dataframe(df, tree_path):  # , keys=None):
     tree = ete3.Tree(tree_path, format=1, quoted_node_names=True)
 
     # How much overlap is there?
-    print(
-        len(set(tree.get_leaf_names()) & set(df.columns)) / len(set(df.columns))
-    )  # Hope for 1.0
+    overlap = len(set(tree.get_leaf_names()) & set(df.columns)) / len(
+        set(df.columns)
+    )
+    if overlap < 1:
+        print(f"WARNING: {overlap*100:.2f}% overlap between tree and dataframe")
 
     # Get tree and dataframe in agreement
     tree.prune(list(df.columns))  # Prune tree to OTUs in dataset
     df.reindex(
         columns=tree.get_leaf_names()
     )  # Reindex dataframe to OTUs in tree
-    print("Done pruning and reindexing")
 
-    # Get lambda values per-disease
-    # pls = {k: [] for k in keys}
     pls = pd.Series(index=df.index, name="lambda", dtype=float)
     pl = PagelsLambda(tree)
-    print("PagelsLambda initialized")
     for i in tqdm(range(len(df))):
         try:
             row = df.iloc[i]
@@ -125,4 +123,4 @@ def pagels_dataframe(df, tree_path):  # , keys=None):
         except:
             pls.iloc[i] = np.nan
 
-    return pls
+    return pls, tree
