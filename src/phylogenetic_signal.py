@@ -66,10 +66,25 @@ class PagelsLambda(object):
                 z0, sigma2, ll = self.mle(x, C_lam)
                 return -ll
 
-            res = minimize(neg_ll, x0=0.5, bounds=[(0, 1)])
-            self.lam = res.x[0]
-            self.lnL = -res.fun
-
+            # Trying some more robust try/except structure here
+            try:
+                res = minimize(neg_ll, x0=0.5, bounds=[(0, 1)])
+                self.lam = res.x[0]
+                self.lnL = -res.fun
+                return
+            except:
+                pass
+            try:
+                res = minimize(
+                    neg_ll, x0=0.5, bounds=[(0, 1)], method="Nelder-Mead"
+                )
+                self.lam = res.x[0]
+                self.lnL = -res.fun
+                return
+            except:
+                self.lam = np.nan
+                self.lnL = np.nan
+                return
         else:
             raise ValueError("Unknown method for fitting Pagels lambda.")
 
