@@ -301,5 +301,6 @@ class PagelsLambdaMulti(PagelsLambda):
         res = minimize(
             neg_ll, x0=0.5 * np.ones(X.shape[0]), bounds=[(0, 1)] * X.shape[0]
         )
-        self.lam = res.x[0]
-        self.lnL = -res.fun
+        self.lam = res.x.flatten()
+        # self.lnL = -res.fun
+        self.lnL = self.mle(X, self.rescale_covs(self.lam, cov=C))[2]

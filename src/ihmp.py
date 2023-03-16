@@ -18,7 +18,7 @@ def strip_df(df):
     return df
 
 
-def get_diffs(dataset, top_n=None):
+def get_diffs(dataset, top_n=None, get_abundances=False):
     """Loads all our data!"""
     if dataset == "ibd":
         prefix = "/home/phil/DATA/ihmp/IBD"
@@ -84,11 +84,14 @@ def get_diffs(dataset, top_n=None):
     otus_merged = np.log(otus_merged + 1e-10)  # need pseudocount to avoid -inf
 
     # Compute diffs at patient level:
-    diffs = otus_merged.groupby(level=[0, 1]).diff().dropna()
-    assert len(diffs) == len(otus_merged) - len(
-        otus_merged.groupby(level=[0, 1])
-    )
-    assert len(diffs) < len(otus)  # Avoid merge issues
+    if get_abundances:
+        return otus_merged
+    else:
+        diffs = otus_merged.groupby(level=[0, 1]).diff().dropna()
+        assert len(diffs) == len(otus_merged) - len(
+            otus_merged.groupby(level=[0, 1])
+        )
+        assert len(diffs) < len(otus)  # Avoid merge issues
 
     # return otus, manifest, metadata, metadata_merged, otus_merged, diffs
     return diffs
