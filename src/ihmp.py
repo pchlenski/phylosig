@@ -18,7 +18,9 @@ def strip_df(df):
     return df
 
 
-def get_diffs(dataset, top_n=None, get_abundances=False):
+def get_diffs(
+    dataset, top_n=None, get_abundances=False, include_metadata=False
+):
     """Loads all our data!"""
     if dataset == "ibd":
         prefix = "/home/phil/DATA/ihmp/IBD"
@@ -57,6 +59,7 @@ def get_diffs(dataset, top_n=None, get_abundances=False):
     metadata_merged = pd.merge(metadata, manifest, on="sample_id", how="inner")
 
     # Simplify metadata
+    metadata_premerge = metadata_merged.copy()
     metadata_merged = metadata_merged[
         ["subject_id", "sample_body_site", "sample", "visit_number"]
     ]
@@ -85,7 +88,11 @@ def get_diffs(dataset, top_n=None, get_abundances=False):
 
     # Compute diffs at patient level:
     if get_abundances:
-        return otus_merged
+        if include_metadata:
+            return otus_merged, metadata_premerge
+        else:
+            return otus_merged
+
     else:
         diffs = otus_merged.groupby(level=[0, 1]).diff().dropna()
         assert len(diffs) == len(otus_merged) - len(
@@ -94,7 +101,10 @@ def get_diffs(dataset, top_n=None, get_abundances=False):
         assert len(diffs) < len(otus)  # Avoid merge issues
 
     # return otus, manifest, metadata, metadata_merged, otus_merged, diffs
-    return diffs
+    if include_metadata:
+        return diffs, metadata_premerge
+    else:
+        return diffs
 
 
 def pagels_dataframe(df, tree_path):  # , keys=None):
