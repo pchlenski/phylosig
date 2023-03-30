@@ -24,7 +24,8 @@ class PagelsLambda(object):
         self,
         x: torch.Tensor,
         y=None,
-        method: str = "optimize",
+        max_iterations: int = 1000,
+        tolerance: float = 1e-6,
         unbiased: bool = False,
     ) -> None:
         """
@@ -54,47 +55,46 @@ class PagelsLambda(object):
         self.null_lnL = self.mle(x, self.rescale_cov(0, cov=C))[2]
 
         # Maximum likelihood estimation
-        if method == "grid":
-            max_ll = -float("inf")
-            lam_mle = None
-            for lam in torch.linspace(0, 1, 101):
-                C_lam = self.rescale_cov(lam, cov=C)
-                z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
-                if ll > max_ll:
-                    max_ll = ll
-                    lam_mle = lam
-            self.lam = lam_mle
-            self.lnL = max_ll
+        def neg_ll(lam):
+            C_lam = self.rescale_cov(lam, cov=C)
+            z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
+            return -ll
 
-        elif method == "optimize":
+        def closure():
+            optimizer.zero_grad()
+            loss = neg_ll(lam_tensor)
+            loss.backward()
+            # print("Gradients:", lam_tensor.grad)
+            return loss
 
-            def neg_ll(lam):
-                C_lam = self.rescale_cov(lam, cov=C)
-                z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
-                return -ll
+        lam_tensor = torch.tensor([0.5], requires_grad=True)
+        optimizer = torch.optim.LBFGS(
+            [lam_tensor],
+            lr=0.01,
+            max_iter=100,
+            line_search_fn="strong_wolfe",
+        )
+        prev_loss = float("inf")
 
-            # Trying some more robust try/except structure here
-            try:
-                res = minimize(neg_ll, x0=0.5, bounds=[(0, 1)])
-                self.lam = res.x[0]
-                self.lnL = -res.fun
-                return
-            except:
-                pass
-            try:
-                res = minimize(
-                    neg_ll, x0=0.5, bounds=[(0, 1)], method="Nelder-Mead"
-                )
-                self.lam = res.x[0]
-                self.lnL = -res.fun
+        for _ in range(max_iterations):
+            loss = optimizer.step(closure)
+            # optimizer.zero_grad()
+            # loss = neg_ll(lam_tensor)
+            # loss.backward()
+            if abs(prev_loss - loss) < tolerance:
+                break
+            prev_loss = loss
+            print(lam_tensor.item(), loss)
+            if lam_tensor < 0:
+                lam_tensor = torch.tensor([0.0])
+                break
+            if lam_tensor > 1:
+                lam_tensor = torch.tensor([1.0])
+                break
 
-                return
-            except:
-                self.lam = float("nan")
-                self.lnL = float("nan")
-                return
-        else:
-            raise ValueError("Unknown method for fitting Pagels lambda.")
+        self.lam = lam_tensor.item()
+        self.lnL = -loss
+        return
 
     def rescale_cov(self, lam: float, cov: torch.Tensor = None) -> torch.Tensor:
         """
@@ -139,9 +139,9 @@ class PagelsLambda(object):
 
         # First, get z0
         one = torch.ones(size=(N, 1))
-        z0 = (
-            torch.linalg.pinv(one.T @ C_inv @ one) @ (one.T @ C_inv @ x)
-        ).item()
+        z0 = torch.linalg.pinv(one.T @ C_inv @ one) @ (
+            one.T @ C_inv @ x
+        )  # .item()
 
         # Next, get sigma2
         x0 = x - z0 * one  # (N, 1)
@@ -150,7 +150,10 @@ class PagelsLambda(object):
             sigma2 = sigma2 / (N - 1)
         else:
             sigma2 = sigma2 / N
-        sigma2 = sigma2.item()
+        # sigma2 = sigma2.item()
+
+        # Print
+        # print(f"z0 = {z0:.4f}, sigma2 = {sigma2:.4f}")
 
         # Finally, get log-likelihood
         ll_num = -0.5 * x0.T @ torch.linalg.pinv(sigma2 * C_lam) @ x0
@@ -158,6 +161,9 @@ class PagelsLambda(object):
             N * torch.log(2 * torch.tensor([3.141592653589793]))
             + torch.linalg.slogdet(sigma2 * C_lam)[1]
         )
-        ll = (ll_num - ll_denom).item()
+        ll = ll_num - ll_denom  # .item()
+
+        # Print
+        # print(f"lnL = {ll:.4f}")
 
         return z0, sigma2, ll
