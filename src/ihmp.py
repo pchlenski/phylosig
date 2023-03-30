@@ -107,7 +107,29 @@ def get_diffs(
         return diffs
 
 
-def prune_tree(df, tree_path):
+# def prune_tree(df, tree_path):
+#     # Get tree
+#     tree = ete3.Tree(tree_path, format=1, quoted_node_names=True)
+
+#     # How much overlap is there?
+#     overlap = len(set(tree.get_leaf_names()) & set(df.columns)) / len(
+#         set(df.columns)
+#     )
+#     if overlap < 1:
+#         print(f"WARNING: {overlap*100:.2f}% overlap between tree and dataframe")
+
+#     # Get tree and dataframe in agreement
+#     tree.prune(list(df.columns))  # Prune tree to OTUs in dataset
+#     df.reindex(
+#         columns=tree.get_leaf_names()
+#     )  # Reindex dataframe to OTUs in tree
+
+#     pl = PagelsLambda(tree)
+
+#     return pl, tree, df
+
+
+def pagels_dataframe(df, tree_path):  # , keys=None):
     # Get tree
     tree = ete3.Tree(tree_path, format=1, quoted_node_names=True)
 
@@ -123,28 +145,6 @@ def prune_tree(df, tree_path):
     df.reindex(
         columns=tree.get_leaf_names()
     )  # Reindex dataframe to OTUs in tree
-
-    pl = PagelsLambda(tree)
-
-    return pl, tree, df
-
-
-def pagels_dataframe(df, pl):  # , keys=None):
-    # # Get tree
-    # tree = ete3.Tree(tree_path, format=1, quoted_node_names=True)
-
-    # # How much overlap is there?
-    # overlap = len(set(tree.get_leaf_names()) & set(df.columns)) / len(
-    #     set(df.columns)
-    # )
-    # if overlap < 1:
-    #     print(f"WARNING: {overlap*100:.2f}% overlap between tree and dataframe")
-
-    # # Get tree and dataframe in agreement
-    # tree.prune(list(df.columns))  # Prune tree to OTUs in dataset
-    # df.reindex(
-    #     columns=tree.get_leaf_names()
-    # )  # Reindex dataframe to OTUs in tree
 
     pls = pd.Series(index=df.index, name="lambda", dtype=float)
     for i in tqdm(range(len(df))):
