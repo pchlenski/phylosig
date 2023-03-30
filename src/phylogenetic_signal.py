@@ -161,146 +161,146 @@ class PagelsLambda(object):
         return z0, sigma2, ll
 
 
-class PagelsLambdaMulti(PagelsLambda):
-    def __init__(self, tree, **kwargs):
-        super().__init__(tree, **kwargs)
+# class PagelsLambdaMulti(PagelsLambda):
+#     def __init__(self, tree, **kwargs):
+#         super().__init__(tree, **kwargs)
 
-    def rescale_covs(
-        self, lam: np.ndarray, cov: np.ndarray = None
-    ) -> np.ndarray:
-        """Apply original rescale_cov for each sample"""
-        # return np.array([super().rescale_cov(l, cov) for l in lam])
-        # Vectorized version using np.apply_along_axis
-        return np.array([self.rescale_cov(l, cov) for l in lam])
+#     def rescale_covs(
+#         self, lam: np.ndarray, cov: np.ndarray = None
+#     ) -> np.ndarray:
+#         """Apply original rescale_cov for each sample"""
+#         # return np.array([super().rescale_cov(l, cov) for l in lam])
+#         # Vectorized version using np.apply_along_axis
+#         return np.array([self.rescale_cov(l, cov) for l in lam])
 
-    def mle(
-        self, X: np.ndarray, C_lam: np.ndarray, unbiased: bool = False
-    ) -> (np.ndarray, np.ndarray, np.ndarray):
-        """
-        Estimate z0 and sigma2 for Brownian motion, plus log-likelihood.
+#     def mle(
+#         self, X: np.ndarray, C_lam: np.ndarray, unbiased: bool = False
+#     ) -> (np.ndarray, np.ndarray, np.ndarray):
+#         """
+#         Estimate z0 and sigma2 for Brownian motion, plus log-likelihood.
 
-        Args:
-            X: (n_samples, n_taxa, 1) array of trait values for M <= N
-            C_lam: (n_samples, n_taxa, n_taxa) stack of rescaled cov. matrices
-            unbiased: if True, use unbiased estimator for sigma2
+#         Args:
+#             X: (n_samples, n_taxa, 1) array of trait values for M <= N
+#             C_lam: (n_samples, n_taxa, n_taxa) stack of rescaled cov. matrices
+#             unbiased: if True, use unbiased estimator for sigma2
 
-        Returns:
-            z0: (n_samples, ) vector of values at root
-            sigma2: (n_samples, ) vector of rates of evolution
-            ll: (n_samples, ) vector of log-likelihoods of data given model
-        """
+#         Returns:
+#             z0: (n_samples, ) vector of values at root
+#             sigma2: (n_samples, ) vector of rates of evolution
+#             ll: (n_samples, ) vector of log-likelihoods of data given model
+#         """
 
-        # print("X", X.shape, "should be (69, 100, 1)")
+#         # print("X", X.shape, "should be (69, 100, 1)")
 
-        # N = x.shape[1]
-        M, N, _ = X.shape  # (n_samples, n_taxa, 1)
+#         # N = x.shape[1]
+#         M, N, _ = X.shape  # (n_samples, n_taxa, 1)
 
-        # C_inv_2d = np.linalg.pinv(C_lam)  # (N, N)
-        # C_inv = np.repeat(C_inv_2d[np.newaxis, :, :], M, axis=0)  # (M, N, N)
-        C_inv = np.linalg.pinv(C_lam)  # (M, N, N)
+#         # C_inv_2d = np.linalg.pinv(C_lam)  # (N, N)
+#         # C_inv = np.repeat(C_inv_2d[np.newaxis, :, :], M, axis=0)  # (M, N, N)
+#         C_inv = np.linalg.pinv(C_lam)  # (M, N, N)
 
-        # print("C", C_inv.shape, "should be (69, 100, 100)")
+#         # print("C", C_inv.shape, "should be (69, 100, 100)")
 
-        # # First, get z0
-        one = np.ones(shape=(M, N, 1))  # (M, N, 1)
-        oneT = one.transpose(0, 2, 1)  # (M, 1, N)
-        # print("one", one.shape, "should be (69, 100, 1)")
-        # print("oneT", one.T.shape, "should be (69, 1, 100)")
-        z0 = np.linalg.pinv(
-            (oneT @ C_inv @ one) @ (oneT @ C_inv @ X)
-        )  # (M, 1, N) @ (M, N, N) @ (M, N, 1) = (M, 1, 1)
+#         # # First, get z0
+#         one = np.ones(shape=(M, N, 1))  # (M, N, 1)
+#         oneT = one.transpose(0, 2, 1)  # (M, 1, N)
+#         # print("one", one.shape, "should be (69, 100, 1)")
+#         # print("oneT", one.T.shape, "should be (69, 1, 100)")
+#         z0 = np.linalg.pinv(
+#             (oneT @ C_inv @ one) @ (oneT @ C_inv @ X)
+#         )  # (M, 1, N) @ (M, N, N) @ (M, N, 1) = (M, 1, 1)
 
-        # # the pinv thing is unstable. Let's do a loop:
-        # z0_loop = np.zeros((M, 1, 1))
-        # one_2d = np.ones((N, 1))
-        # tmp_a = one_2d.T @ C_inv_2d @ one_2d
-        # tmp_b = one_2d.T @ C_inv_2d
-        # for i in range(M):
-        #     # z0[i, 0, 0] = np.linalg.pinv(oneT[i] @ C_inv[i] @ one[i]) @ (oneT[i] @ C_inv[i] @ X[i])
-        #     z0_case = np.linalg.pinv(tmp_a) @ (tmp_b @ X[i])
-        #     print("z0_case", z0_case.shape, "should be (1, 1)")
-        #     z0_loop[i, 0, 0] = z0_case
+#         # # the pinv thing is unstable. Let's do a loop:
+#         # z0_loop = np.zeros((M, 1, 1))
+#         # one_2d = np.ones((N, 1))
+#         # tmp_a = one_2d.T @ C_inv_2d @ one_2d
+#         # tmp_b = one_2d.T @ C_inv_2d
+#         # for i in range(M):
+#         #     # z0[i, 0, 0] = np.linalg.pinv(oneT[i] @ C_inv[i] @ one[i]) @ (oneT[i] @ C_inv[i] @ X[i])
+#         #     z0_case = np.linalg.pinv(tmp_a) @ (tmp_b @ X[i])
+#         #     print("z0_case", z0_case.shape, "should be (1, 1)")
+#         #     z0_loop[i, 0, 0] = z0_case
 
-        # print("z0", z0.shape, "should be (69, 1, 1)")
-        # print("z0_loop", z0_loop.shape, "should be (69, 1, 1)")
+#         # print("z0", z0.shape, "should be (69, 1, 1)")
+#         # print("z0_loop", z0_loop.shape, "should be (69, 1, 1)")
 
-        # print("Difference:", np.linalg.norm(z0 - z0_loop))
+#         # print("Difference:", np.linalg.norm(z0 - z0_loop))
 
-        # Next, get sigma2
-        x0 = X - z0 * one  # (M, N, 1)
-        # print("x0", x0.shape, "should be (69, 100, 1)")
-        x0T = x0.transpose(0, 2, 1)  # (M, 1, N)
-        # print("x0T", x0T.shape, "should be (69, 1, 100)")
-        sigma2 = (
-            x0T @ C_inv @ x0
-        )  # (M, 1, N) @ (M, N, N) @ (M, N, 1) = (M, 1, 1)
-        if unbiased:
-            sigma2 = sigma2 / (N - 1)
-        else:
-            sigma2 = sigma2 / N
-        # print("sigma2", sigma2.shape, "should be (69, 1, 1)")
+#         # Next, get sigma2
+#         x0 = X - z0 * one  # (M, N, 1)
+#         # print("x0", x0.shape, "should be (69, 100, 1)")
+#         x0T = x0.transpose(0, 2, 1)  # (M, 1, N)
+#         # print("x0T", x0T.shape, "should be (69, 1, 100)")
+#         sigma2 = (
+#             x0T @ C_inv @ x0
+#         )  # (M, 1, N) @ (M, N, N) @ (M, N, 1) = (M, 1, 1)
+#         if unbiased:
+#             sigma2 = sigma2 / (N - 1)
+#         else:
+#             sigma2 = sigma2 / N
+#         # print("sigma2", sigma2.shape, "should be (69, 1, 1)")
 
-        # Finally, get log-likelihood
-        ll_num = -0.5 * x0T @ np.linalg.pinv(sigma2 * C_lam) @ x0  # (M, 1, 1)
-        # print("ll_num", ll_num.shape, "should be (69, 1, 1)")
-        ll_denom = 0.5 * (
-            N * np.log(2 * np.pi) + np.linalg.slogdet(sigma2 * C_lam)[1]
-        ).reshape(
-            M, 1, 1
-        )  # (M, 1, 1)
-        # print("ll_denom", ll_denom.shape, "should be (69, 1, 1)")
-        ll = ll_num - ll_denom  # (M, 1, 1)
-        # print("ll", ll.shape, "should be (69, 1, 1)")
+#         # Finally, get log-likelihood
+#         ll_num = -0.5 * x0T @ np.linalg.pinv(sigma2 * C_lam) @ x0  # (M, 1, 1)
+#         # print("ll_num", ll_num.shape, "should be (69, 1, 1)")
+#         ll_denom = 0.5 * (
+#             N * np.log(2 * np.pi) + np.linalg.slogdet(sigma2 * C_lam)[1]
+#         ).reshape(
+#             M, 1, 1
+#         )  # (M, 1, 1)
+#         # print("ll_denom", ll_denom.shape, "should be (69, 1, 1)")
+#         ll = ll_num - ll_denom  # (M, 1, 1)
+#         # print("ll", ll.shape, "should be (69, 1, 1)")
 
-        return z0.flatten(), sigma2.flatten(), ll.flatten()
+#         return z0.flatten(), sigma2.flatten(), ll.flatten()
 
-    def fit(self, X: np.ndarray, y: np.ndarray = None) -> None:
-        """
-        Fit Pagels lambda to a matrix of traits.
+#     def fit(self, X: np.ndarray, y: np.ndarray = None) -> None:
+#         """
+#         Fit Pagels lambda to a matrix of traits.
 
-        Args:
-            X: (n_samples, n_taxa, 1) array of trait values
-            y: ignored (for sklearn compatibility)
-            method: "grid" or "optimize":
-                "grid" uses a grid search to find the best lambda
-                "optimize" uses scipy.optimize.minimize to find the best lambda
+#         Args:
+#             X: (n_samples, n_taxa, 1) array of trait values
+#             y: ignored (for sklearn compatibility)
+#             method: "grid" or "optimize":
+#                 "grid" uses a grid search to find the best lambda
+#                 "optimize" uses scipy.optimize.minimize to find the best lambda
 
-        Returns:
-            None (sets self.lam)
-        """
+#         Returns:
+#             None (sets self.lam)
+#         """
 
-        # Still works for 1D arrays
-        # print("ndim", X.ndim)
-        if X.ndim == 1:
-            X = X.reshape(1, X.shape[0], 1)
-        elif X.ndim == 2:
-            X = X.reshape(X.shape[0], X.shape[1], 1)
-            print("Reshaped X to", X.shape)
-        # print(X.shape)
+#         # Still works for 1D arrays
+#         # print("ndim", X.ndim)
+#         if X.ndim == 1:
+#             X = X.reshape(1, X.shape[0], 1)
+#         elif X.ndim == 2:
+#             X = X.reshape(X.shape[0], X.shape[1], 1)
+#             print("Reshaped X to", X.shape)
+#         # print(X.shape)
 
-        # Find columns (taxa) with any missing or inf values
-        to_remove = np.logical_or(
-            np.isnan(X).any(axis=0), np.isinf(X).any(axis=0)
-        ).squeeze()  # (N, )
-        print(to_remove.shape)
-        X = X[:, ~to_remove, :]
-        C = self.C[~to_remove, :][:, ~to_remove]
+#         # Find columns (taxa) with any missing or inf values
+#         to_remove = np.logical_or(
+#             np.isnan(X).any(axis=0), np.isinf(X).any(axis=0)
+#         ).squeeze()  # (N, )
+#         print(to_remove.shape)
+#         X = X[:, ~to_remove, :]
+#         C = self.C[~to_remove, :][:, ~to_remove]
 
-        # # log-likelihood of null model, vectorized (still C[i,j] = d(i,j)):
-        # self.null_lnL = np.apply_along_axis(
-        #     self.mle(X, self.rescale_cov(0, cov=C))[2], 0, X
-        # )  # TODO: verify this matches repeated calls to self.mle
-        # TODO: implement this
+#         # # log-likelihood of null model, vectorized (still C[i,j] = d(i,j)):
+#         # self.null_lnL = np.apply_along_axis(
+#         #     self.mle(X, self.rescale_cov(0, cov=C))[2], 0, X
+#         # )  # TODO: verify this matches repeated calls to self.mle
+#         # TODO: implement this
 
-        # Maximum likelihood estimation - skip grid search
-        def neg_ll(lams):
-            C_lam = self.rescale_covs(lams, cov=C)
-            z0s, sigma2s, lls = self.mle(X, C_lam)
-            return -lls.sum()
+#         # Maximum likelihood estimation - skip grid search
+#         def neg_ll(lams):
+#             C_lam = self.rescale_covs(lams, cov=C)
+#             z0s, sigma2s, lls = self.mle(X, C_lam)
+#             return -lls.sum()
 
-        res = minimize(
-            neg_ll, x0=0.5 * np.ones(X.shape[0]), bounds=[(0, 1)] * X.shape[0]
-        )
-        self.lam = res.x.flatten()
-        # self.lnL = -res.fun
-        self.lnL = self.mle(X, self.rescale_covs(self.lam, cov=C))[2]
+#         res = minimize(
+#             neg_ll, x0=0.5 * np.ones(X.shape[0]), bounds=[(0, 1)] * X.shape[0]
+#         )
+#         self.lam = res.x.flatten()
+#         # self.lnL = -res.fun
+#         self.lnL = self.mle(X, self.rescale_covs(self.lam, cov=C))[2]
