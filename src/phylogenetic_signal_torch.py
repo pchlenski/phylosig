@@ -9,16 +9,19 @@ class PagelsLambda(object):
         if isinstance(tree, str):
             tree = ete3.Tree(tree, **kwargs)
         self.tree = tree
-        self.leaf_order = [leaf.name for leaf in tree.get_leaves()]
-        self.N = len(tree.get_leaves())
+        self.leaves = tree.get_leaves()
+        self.leaf_order = [leaf.name for leaf in self.leaves]
+        self.N = len(self.leaves)
 
         # Raw covariance matrix has C[i,j] = d(MRCA(i,j), root)
         self.C = torch.zeros((self.N, self.N))
         for i, leaf_i in enumerate(self.tree):
-            for j, leaf_j in enumerate(self.tree):
+            # for j, leaf_j in enumerate(self.tree):
+            for j in range(i + 1, self.N):
+                leaf_j = self.leaves[j]
                 # If i == j, then the distance is leaf to root
                 mrca = self.tree.get_common_ancestor(leaf_i, leaf_j)
-                self.C[i, j] = mrca.get_distance(self.tree)
+                self.C[i, j] = self.C[j, i] = mrca.get_distance(self.tree)
 
     def fit(
         self,
