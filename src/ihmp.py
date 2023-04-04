@@ -70,8 +70,9 @@ def get_diffs(
     otus_merged = pd.merge(
         otus, metadata_merged, left_index=True, right_on="sample", how="inner"
     )
-    otus_merged = otus_merged.drop("sample", axis=1)
-    otus_merged = otus_merged.set_index(["site", "patient", "visit"])
+    # otus_merged = otus_merged.drop("sample", axis=1)
+    # otus_merged = otus_merged.set_index(["site", "patient", "visit"])
+    otus_merged = otus_merged.set_index(["site", "patient", "visit", "sample"])
 
     # Normalize OTUs
     otus_merged /= otus_merged.sum(axis=1).values[:, None]
