@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import ete3
 from scipy.optimize import minimize
 
@@ -19,6 +20,8 @@ class PagelsLambda(object):
                 # If i == j, then the distance is leaf to root
                 mrca = self.tree.get_common_ancestor(leaf_i, leaf_j)
                 self.C[i, j] = mrca.get_distance(self.tree)
+
+        self.memos = {}  # Memoize C-inverse for speed :)
 
     def fit(
         self,
@@ -41,6 +44,12 @@ class PagelsLambda(object):
         Returns:
             None (sets self.lam)
         """
+
+        if isinstance(x, list):
+            x = np.array(x)
+
+        if isinstance(x, pd.Series):
+            x = x.values
 
         if x.ndim == 1:
             x = x.reshape(x.shape[0], 1)
@@ -133,7 +142,11 @@ class PagelsLambda(object):
 
         N = len(x)
 
-        C_inv = np.linalg.pinv(C_lam)
+        if lam not in self.memos:
+            C_inv = np.linalg.pinv(C_lam)
+            self.memos[lam] = C_inv
+        else:
+            C_inv = self.memos[lam]
 
         # First, get z0
         one = np.ones(shape=(N, 1))
