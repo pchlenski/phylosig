@@ -19,7 +19,12 @@ def strip_df(df):
 
 
 def get_diffs(
-    dataset, top_n=None, get_abundances=False, include_metadata=False
+    dataset,
+    top_n=None,
+    get_abundances=False,
+    include_metadata=False,
+    log=True,
+    normalize=True,
 ):
     """Loads all our data!"""
     if dataset == "ibd":
@@ -75,7 +80,8 @@ def get_diffs(
     otus_merged = otus_merged.set_index(["site", "patient", "visit", "sample"])
 
     # Normalize OTUs
-    otus_merged /= otus_merged.sum(axis=1).values[:, None]
+    if normalize:
+        otus_merged /= otus_merged.sum(axis=1).values[:, None]
 
     # Filter to top N OTUs
     if top_n is not None:
@@ -85,7 +91,10 @@ def get_diffs(
         otus_merged = otus_merged[top_otus]
 
     # Take log
-    otus_merged = np.log(otus_merged + 1e-10)  # need pseudocount to avoid -inf
+    if log:
+        otus_merged = np.log(
+            otus_merged + 1e-10
+        )  # need pseudocount to avoid -inf
 
     # Compute diffs at patient level:
     if get_abundances:
