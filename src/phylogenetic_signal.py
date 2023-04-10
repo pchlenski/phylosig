@@ -2,26 +2,33 @@ import numpy as np
 import pandas as pd
 import ete3
 from scipy.optimize import minimize
+from tqdm import tqdmr
 
 
 class PagelsLambda(object):
-    def __init__(self, tree, **kwargs):
+    def __init__(self, tree, memoized=False, **kwargs):
         """Initialize PagelsLambda object. Takes ete tree or path to tree file."""
         if isinstance(tree, str):
             tree = ete3.Tree(tree, **kwargs)
         self.tree = tree
-        self.leaf_order = [leaf.name for leaf in tree.get_leaves()]
-        self.N = len(tree.get_leaves())
+        leaves = tree.get_leaves()
+        self.leaf_order = [leaf.name for leaf in leaves]
+        self.N = len(leaves)
 
         # Raw covariance matrix has C[i,j] = d(MRCA(i,j), root)
         self.C = np.zeros((self.N, self.N))
-        for i, leaf_i in enumerate(self.tree):
-            for j, leaf_j in enumerate(self.tree):
-                # If i == j, then the distance is leaf to root
+        for i in tqdmr(self.N):
+            leaf_i = leaves[i]
+            for j in range(i, self.N):
+                leaf_j = leaves[j]
                 mrca = self.tree.get_common_ancestor(leaf_i, leaf_j)
                 self.C[i, j] = mrca.get_distance(self.tree)
+                if i != j:  # Symmetric
+                    self.C[j, i] = self.C[i, j]
 
-        self.memos = {}  # Memoize C-inverse for speed :)
+        self.memoized = memoized
+        if memoized:
+            self.memos = {}  # Memoize C-inverse for speed :)
 
     def fit(
         self,
@@ -60,15 +67,17 @@ class PagelsLambda(object):
         C = self.C[~missing, :][:, ~missing]
 
         # Compute null: C[i,j] = d(i,j)
-        self.null_lnL = self.mle(x, self.rescale_cov(0, cov=C))[2]
+        # self.null_lnL = self.mle(x, self.rescale_cov(0, cov=C))[2]
+        self.null_lnL = self.mle(x, 0, unbiased=unbiased)[2]
 
         # Maximum likelihood estimation
         if method == "grid":
             max_ll = -np.inf
             lam_mle = None
             for lam in np.linspace(0, 1, 101):
-                C_lam = self.rescale_cov(lam, cov=C)
-                z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
+                # C_lam = self.rescale_cov(lam, cov=C)
+                # z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
+                z0, sigma2, ll = self.mle(x, lam, unbiased=unbiased)
                 if ll > max_ll:
                     max_ll = ll
                     lam_mle = lam
@@ -78,29 +87,36 @@ class PagelsLambda(object):
         elif method == "optimize":
 
             def neg_ll(lam):
-                C_lam = self.rescale_cov(lam, cov=C)
-                z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
+                # C_lam = self.rescale_cov(lam, cov=C)
+                # z0, sigma2, ll = self.mle(x, C_lam, unbiased=unbiased)
+                z0, sigma2, ll = self.mle(x, lam, unbiased=unbiased)
                 return -ll
 
             # Trying some more robust try/except structure here
-            try:
-                res = minimize(neg_ll, x0=0.5, bounds=[(0, 1)])
-                self.lam = res.x[0]
-                self.lnL = -res.fun
-                return
-            except:
-                pass
-            try:
-                res = minimize(
-                    neg_ll, x0=0.5, bounds=[(0, 1)], method="Nelder-Mead"
-                )
-                self.lam = res.x[0]
-                self.lnL = -res.fun
-                return
-            except:
-                self.lam = np.nan
-                self.lnL = np.nan
-                return
+            # try:
+            res = minimize(
+                neg_ll,
+                x0=0.5,
+                bounds=[(0, 1)],
+                method="Nelder-Mead",
+                options={"xatol": 1e-4},
+            )
+            self.lam = res.x[0]
+            self.lnL = -res.fun
+            return
+            # except:
+            #     pass
+            # # try:
+            #     res = minimize(
+            #         neg_ll, x0=0.5, bounds=[(0, 1)], method="Nelder-Mead"
+            #     )
+            #     self.lam = res.x[0]
+            #     self.lnL = -res.fun
+            #     return
+            # except:
+            #     self.lam = np.nan
+            #     self.lnL = np.nan
+            #     return
         else:
             raise ValueError("Unknown method for fitting Pagels lambda.")
 
@@ -124,7 +140,7 @@ class PagelsLambda(object):
         return C_lam
 
     def mle(
-        self, x: np.ndarray, C_lam: np.ndarray, unbiased: bool = False
+        self, x: np.ndarray, lam: float, unbiased: bool = False
     ) -> (float, float, float):
         """
         Estimate z0 and sigma2 for Brownian motion, plus log-likelihood.
@@ -141,22 +157,28 @@ class PagelsLambda(object):
         """
 
         N = len(x)
+        lam = float(lam)
 
-        if lam not in self.memos:
-            C_inv = np.linalg.pinv(C_lam)
-            self.memos[lam] = C_inv
-        else:
+        if self.memoized and lam in self.memos:
             C_inv = self.memos[lam]
+            C_inv_slogdet = self.memos[f"{lam}_slogdet"]
+
+        else:
+            C_lam = self.rescale_cov(lam)
+            C_inv = np.linalg.pinv(C_lam)
+            C_inv_slogdet = np.linalg.slogdet(C_inv)[1]
+            if self.memoized:
+                self.memos[lam] = C_inv
+                self.memos[f"{lam}_slogdet"] = C_inv_slogdet
 
         # First, get z0
-        one = np.ones(shape=(N, 1))
-        # z0_front = np.linalg.pinv(one.T @ C_inv @ one)
-        # z0_end = one.T @ C_inv @ x
-        # z0 = z0_front * z0_end
-        z0 = (np.linalg.pinv(one.T @ C_inv @ one) @ (one.T @ C_inv @ x)).item()
+        # one = np.ones(shape=(N, 1))
+        # z0 = (np.linalg.pinv(one.T @ C_inv @ one) @ (one.T @ C_inv @ x)).item()
+        z0 = (1 / x.sum().sum()) * (C_inv @ x).sum()  # No inversion
+        x0 = x - z0
 
         # Next, get sigma2
-        x0 = x - z0 * one  # (N, 1)
+        # x0 = x - z0 * one  # (N, 1)
         sigma2 = x0.T @ C_inv @ x0  # (1, N) @ (N, N) @ (N, 1) = (1, 1)
         if unbiased:
             sigma2 = sigma2 / (N - 1)
@@ -165,11 +187,23 @@ class PagelsLambda(object):
         sigma2 = sigma2.item()
 
         # Finally, get log-likelihood
-        ll_num = -0.5 * x0.T @ np.linalg.pinv(sigma2 * C_lam) @ x0
-        ll_denom = 0.5 * (
-            N * np.log(2 * np.pi) + np.linalg.slogdet(sigma2 * C_lam)[1]
-        )
+        # ll_num = -0.5 * x0.T @ C_inv @ x0 / sigma2
+        # det = N * np.log(sigma2) - np.linalg.slogdet(C_inv)[1]
+        # ll_denom = 0.5 * (N * np.log(2 * np.pi) + det)
+        # ll = (ll_num - ll_denom).item()
+
+        ll_num = -0.5 * x0.T @ C_inv @ x0 / sigma2
+        # ll_num = -0.5 * x0.T @ np.linalg.pinv(sigma2 * C_lam) @ x0
+        ll_num = -0.5 * x0.T @ C_inv @ x0 / sigma2
+        # det = np.linalg.slogdet(sigma2 * C_lam)[1]
+        det = N * np.log(sigma2) - C_inv_slogdet
+        ll_denom = 0.5 * (N * np.log(2 * np.pi) + det)
         ll = (ll_num - ll_denom).item()
+
+        # ll = np.linalg.slogdet(sigma2 * C_lam)[1]
+        # ll = (-np.linalg.slogdet(C_inv)[1] - N * np.log(sigma2)).item()
+        # ll = C_inv_slogdet
+        # That's literally it!
 
         return z0, sigma2, ll
 
