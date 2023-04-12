@@ -3,3 +3,4 @@ greengenes/data/gg*
 greengenes/output/
 *.pyc
 .DS_Store
+*.pkl

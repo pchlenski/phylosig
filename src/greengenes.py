@@ -199,10 +199,12 @@ def combine_similarity_maps(map_dicts):
     return higher_level_map
 
 
-def merge_otu_table(otu_table, map_dict):
+def merge_otu_table(otu_table, map_dict, drop=True):
     new_otu_table = pd.DataFrame(index=otu_table.index)
     for cluster_id, otus in map_dict.items():
         existing_otus = [otu for otu in otus if otu in otu_table.columns]
         if existing_otus:
             new_otu_table[cluster_id] = otu_table[existing_otus].sum(axis=1)
+    if drop:
+        new_otu_table = new_otu_table.loc[:, new_otu_table.sum(axis=0) > 0]
     return new_otu_table
