@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import ete3
-from scipy.optimize import minimize
+from scipy.optimize import minimize, fmin_powell
 from tqdm import tqdm
 from multiprocessing import Pool
 from functools import partial
@@ -65,6 +65,8 @@ class PagelsLambda(object):
         x: np.ndarray,
         y=None,
         unbiased: bool = False,
+        precision: int = 10,
+        method: str = "optimize",
     ) -> None:
         """
         Fit Pagels lambda to a set of traits.
@@ -103,19 +105,30 @@ class PagelsLambda(object):
             lam = float(lam)
             # if self.memoized:
             #     lam = np.round(lam, 4)  # Round to 4 decimal places
-            lam = np.round(lam, 10)
+            lam = np.round(lam, precision)
             z0, sigma2, ll = self.mle(x, lam, C=C, unbiased=unbiased)
             return -ll
 
-        res = minimize(
-            neg_ll,
-            x0=0.5,
-            bounds=[(0, 1)],
-            tol=1e-6,
-        )
-        self.lam = res.x[0]
-        self.lnL = -res.fun
-        return
+        if method == "grid":
+            lams = np.linspace(0, 1, 51)
+            lls = [neg_ll(lam) for lam in lams]
+            self.lam = lams[np.argmax(lls)]
+            self.lnL = -np.max(lls)
+            return
+        elif method == "optimize":
+            res = minimize(
+                neg_ll,
+                x0=0.5,
+                bounds=[(0, 1)],
+                tol=1e-6,
+                method="nelder-mead",
+                options={"xatol": 10 ** -precision},
+            )
+            self.lam = res.x[0]
+            self.lnL = -res.fun
+            return
+        else:
+            raise ValueError(f"Unknown method: {method}")
 
     def rescale_cov(self, lam: float, cov: np.ndarray = None) -> np.ndarray:
         """
@@ -163,7 +176,7 @@ class PagelsLambda(object):
             C = self.C
 
         if self.memoized and lam in self.memos:
-            C_inv = self.memos[lam]
+            C_inv = self.memos[lam].astype(np.float32)
             # C_logdet = self.memos[f"{lam}_logdet"]
 
         else:
@@ -172,8 +185,9 @@ class PagelsLambda(object):
             C_inv = torch.inverse(torch.tensor(C_lam)).numpy()  # Faster
             # C_logdet = np.linalg.slogdet(C_lam)[1]
             if self.memoized:
-                self.memos[lam] = C_inv
+                self.memos[lam] = C_inv.astype(np.float16)
                 # self.memos[f"{lam}_logdet"] = C_logdet
+                # print(len(self.memos))
 
         C_logdet = -np.linalg.slogdet(C_inv)[1]
 
