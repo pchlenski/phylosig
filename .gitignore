@@ -1,6 +1,7 @@
 .ipynb_checkpoints/
-greengenes/data/gg*
-greengenes/output/
+greengenes/
+ihmp/
+emp/data/
 *.pyc
 .DS_Store
 *.pkl
