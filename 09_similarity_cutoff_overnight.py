@@ -18,7 +18,8 @@ from src.greengenes import (
 # I load OTU tables using the basic iHMP scripts from earlier notebooks
 
 data = {
-    name: get_diffs(name, get_abundances=True, log=False)  # undo log transform
+    # name: get_diffs(name, get_abundances=True, log=False)  # undo log transform
+    name: get_diffs(name, get_abundances=False, log=False)
     for name in ["ibd", "moms", "t2d"]
 }
 
@@ -26,7 +27,6 @@ data = {
 
 # Get lambdas for each cutoff
 from multiprocessing import Pool
-from functools import partial
 
 MEMOIZED = True
 PRECISION = 2
@@ -45,8 +45,12 @@ for name in ["ibd", "moms", "t2d"]:
 
             # Non-redundancy check
             site_str = site.replace(" ", "_")
-            outpath = f"./results/{name}_{site_str}_pls_cutoff{x}.tsv"
-            pklpath = f"./results/{name}_{site_str}_pls_cutoff{x}.pkl"
+            outpath = (
+                f"./results/growth_cluster/{name}_{site_str}_pls_cutoff{x}.tsv"
+            )
+            pklpath = (
+                f"./results/growth_cluster/{name}_{site_str}_pls_cutoff{x}.pkl"
+            )
             if os.path.exists(outpath):
                 print(f"Skipping {outpath} because it already exists.")
                 lambdas_cutoff_df = pd.read_csv(outpath, sep="\t")
