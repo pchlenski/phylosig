@@ -6,3 +6,4 @@ emp/data/
 *.pyc
 .DS_Store
 *.pkl
+embed/
