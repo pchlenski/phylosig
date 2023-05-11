@@ -208,3 +208,22 @@ def merge_otu_table(otu_table, map_dict, drop=True):
     if drop:
         new_otu_table = new_otu_table.loc[:, new_otu_table.sum(axis=0) > 0]
     return new_otu_table
+
+
+def calculate_fb_ratio(
+    sample: pd.Series,
+    f_path="./greengenes/data/firmicutes.txt",
+    b_path="./greengenes/data/bacteroidetes.txt",
+) -> float:
+    """Given a greengenes-annotated series, calculate F/B ratio"""
+    # Load annotations
+    f_ids = set(open(f_path).read().strip().split("\n"))
+    b_ids = set(open(b_path).read().strip().split("\n"))
+
+    f_total = sample[sample.index.isin(f_ids)].sum()
+    b_total = sample[sample.index.isin(b_ids)].sum()
+
+    if b_total == 0:
+        return np.nan
+    else:
+        return f_total / b_total
